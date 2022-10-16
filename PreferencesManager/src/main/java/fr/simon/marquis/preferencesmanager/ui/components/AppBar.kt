@@ -4,7 +4,6 @@ package fr.simon.marquis.preferencesmanager.ui.components
 
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
@@ -22,7 +21,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
@@ -30,10 +28,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.google.accompanist.systemuicontroller.rememberSystemUiController
 import fr.simon.marquis.preferencesmanager.R
 import fr.simon.marquis.preferencesmanager.ui.theme.AppTheme
-import kotlinx.coroutines.flow.MutableStateFlow
 
 private val slideIn = {
     slideIn(
@@ -63,24 +59,18 @@ fun AppBar(
     navigationIcon: @Composable () -> Unit = {},
     title: @Composable () -> Unit,
     actions: @Composable RowScope.() -> Unit = {},
-    textState: MutableStateFlow<TextFieldValue>? = null,
+    textState: TextFieldValue? = null,
     isSearching: Boolean = false,
-    onSearchClose: () -> Unit = {}
+    onSearchClose: () -> Unit = {},
+    onSearchValueChange: (TextFieldValue) -> Unit,
 ) {
-    val backgroundColors = TopAppBarDefaults.centerAlignedTopAppBarColors()
-    val minColor = backgroundColors.containerColor(colorTransitionFraction = 0f).value
-    val maxColor = backgroundColors.containerColor(colorTransitionFraction = 1f).value
-    val easing = FastOutLinearInEasing.transform(scrollBehavior?.state?.overlappedFraction ?: 0f)
-    val backgroundColor = lerp(minColor, maxColor, easing)
-
-    val systemUiController = rememberSystemUiController()
-    systemUiController.setStatusBarColor(backgroundColor)
 
     val foregroundColors = TopAppBarDefaults.centerAlignedTopAppBarColors(
         containerColor = Color.Transparent,
         scrolledContainerColor = Color.Transparent
     )
-    Box(modifier = Modifier.background(backgroundColor)) {
+
+    Box(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
         SmallTopAppBar(
             modifier = modifier,
             actions = actions,
@@ -103,9 +93,10 @@ fun AppBar(
                 exit = slideUp(),
             ) {
                 SearchView(
-                    backgroundColor = backgroundColor,
-                    state = textState,
-                    onClose = onSearchClose
+                    backgroundColor = MaterialTheme.colorScheme.surface,
+                    value = textState,
+                    onClose = onSearchClose,
+                    onValueChange = onSearchValueChange,
                 )
             }
         }
@@ -115,7 +106,8 @@ fun AppBar(
 @Composable
 fun SearchView(
     backgroundColor: Color,
-    state: MutableStateFlow<TextFieldValue>,
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
     onClose: () -> Unit
 ) {
     TextField(
@@ -126,15 +118,13 @@ fun SearchView(
         textStyle = TextStyle(fontSize = 18.sp),
         singleLine = true,
         shape = RectangleShape, // The TextFiled has rounded corners top left and right by default
-        value = state.collectAsState().value,
-        onValueChange = { value ->
-            state.value = value
-        },
+        value = value,
+        onValueChange = onValueChange,
         leadingIcon = {
             IconButton(
                 onClick = {
                     onClose()
-                    state.value = TextFieldValue("")
+                    onValueChange(TextFieldValue(""))
                 }
             ) {
                 Icon(
@@ -147,7 +137,7 @@ fun SearchView(
             IconButton(
                 onClick = {
                     // Remove text from TextField when you press the 'X' icon
-                    state.value = TextFieldValue("")
+                    onValueChange(TextFieldValue(""))
                 }
             ) {
                 Icon(
@@ -177,12 +167,16 @@ fun NavigationBack(
 @Composable
 private fun Preview_AppBar(
     appName: String = stringResource(id = R.string.app_name),
-    textState: MutableStateFlow<TextFieldValue> = MutableStateFlow(TextFieldValue(""))
-) {
+
+    ) {
+    var textFieldValue: TextFieldValue by remember { mutableStateOf(TextFieldValue("")) }
     AppTheme(isSystemInDarkTheme()) {
         AppBar(
             title = { Text(appName) },
-            textState = textState
+            textState = textFieldValue,
+            onSearchValueChange = {
+                textFieldValue = it
+            }
         )
     }
 }

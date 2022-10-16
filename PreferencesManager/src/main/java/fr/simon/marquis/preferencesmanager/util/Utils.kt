@@ -40,6 +40,8 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONException
 import timber.log.Timber
+import java.io.Closeable
+import fr.simon.marquis.preferencesmanager.util.Shell as ShellUtil
 
 // Support Android 33+ getParcelable()
 fun <T : Any> getParcelable(intent: Bundle, key: String?, clazz: Class<T>): T? {
@@ -73,12 +75,12 @@ object Utils {
 
     private val TAG: String = Utils::class.java.simpleName
 
-    private const val CMD_FIND_XML_FILES = "find /data/data/%s -type f -name \\*.xml"
-    private const val CMD_CHOWN = "chown %s.%s \"%s\""
-    private const val CMD_CAT_FILE = "cat \"%s\""
-    private const val CMD_CP = "cp \"%s\" \"%s\""
+    private fun generateCopyCommand(src: String, dest: String) = """cp "$src" "$dest""""
+    private fun generateCopyCommand(src: File, dest: String) =
+        generateCopyCommand(src.absolutePath, dest)
+
     private const val TMP_FILE = ".temp"
-    private val LINE_SEPARATOR = System.getProperty("line.separator")
+    private val LINE_SEPARATOR: String = System.getProperty("line.separator") ?: "\n"
 
     var previousApps: ArrayList<AppEntry>? = null
         private set
@@ -133,7 +135,7 @@ object Utils {
         Timber.tag(TAG).d("updateApplicationInfo(%s, %s)", packageName, favorite)
         for (a in previousApps!!) {
             if (a.applicationInfo.packageName == packageName) {
-                a.setFavorite(favorite)
+                a.isFavorite = favorite
                 return
             }
         }
@@ -182,27 +184,24 @@ object Utils {
     }
 
     fun findXmlFiles(packageName: String): List<String> {
-        Timber.tag(TAG).d(packageName, "findXmlFiles(%s)")
+        Timber.tag(TAG).d("findXmlFiles($packageName)")
 
         val stdout: List<String> = ArrayList()
         val stderr: List<String> = ArrayList()
-        Shell.cmd(String.format(CMD_FIND_XML_FILES, packageName)).to(stdout, stderr).exec()
+        ShellUtil.findXmlFiles(packageName).to(stdout, stderr).exec()
 
         return stdout
     }
 
     fun readFile(file: String): String {
-        Timber.tag(TAG).d(file, "readFile(%s)")
+        Timber.tag(TAG).d("readFile($file)")
         val sb = StringBuilder()
         val lines = ArrayList<String>()
-        Shell.cmd(String.format(CMD_CAT_FILE, file)).to(lines).exec()
+        val stderr = ArrayList<String>()
+        ShellUtil.cat(file).to(lines, stderr).exec()
 
-        for (line in lines) {
-            sb.append(line)
-            sb.append(LINE_SEPARATOR)
-        }
 
-        return sb.toString()
+        return lines.joinToString(LINE_SEPARATOR)
     }
 
     fun getBackups(ctx: Context, packageName: String): BackupContainer {
@@ -235,10 +234,10 @@ object Utils {
     fun backupFile(ctx: Context, date: Long, pkgName: String, fileName: String): Boolean {
         val fileDir = ctx.externalCacheDir
         val name = fileName.substringAfterLast("/")
-        val destination = File(fileDir, "$date $pkgName $name")
+        val destination = File(fileDir, "${date}_${pkgName}_$name")
 
-        Timber.tag(TAG).d("backupFile(%s, %s)", date, name)
-        val job = Shell.cmd(String.format(CMD_CP, fileName, destination.absolutePath)).exec()
+        Timber.tag(TAG).d("backupFile($date, $name)")
+        val job = ShellUtil.cp(fileName, destination.absolutePath)
 
         Timber.tag(TAG).d("backupFile --> %s", destination)
         return job.isSuccess
@@ -247,7 +246,7 @@ object Utils {
     fun restoreFile(ctx: Context, fileName: String, packageName: String): Boolean {
         Timber.tag(TAG).d("restoreFile(%s, %s)", fileName, packageName)
         val backupFile = File(fileName)
-        Shell.cmd(String.format(CMD_CP, backupFile.absolutePath, fileName)).exec()
+        ShellUtil.cp(backupFile.absolutePath, fileName)
 
         if (!fixUserAndGroupId(ctx, fileName, packageName)) {
             Timber.tag(TAG).e("Error fixUserAndGroupId")
@@ -298,31 +297,33 @@ object Utils {
 
         val tmpFile = File(ctx.filesDir, TMP_FILE)
         try {
-            val outputStreamWriter =
-                OutputStreamWriter(ctx.openFileOutput(TMP_FILE, Context.MODE_PRIVATE))
-            outputStreamWriter.write(preferences)
-            outputStreamWriter.close()
-        } catch (e: IOException) {
-            Timber.tag(TAG).e(e, "Error writing temporary file")
-            return false
+
+            OutputStreamWriter(ctx.openFileOutput(TMP_FILE, Context.MODE_PRIVATE)).tryUse {
+                it.write(preferences)
+            }?.let {e ->
+                Timber.tag(TAG).e(e, "Error writing temporary file")
+                return false
+            }
+
+            val cpSuccess = ShellUtil.cp(tmpFile.absolutePath, file).isSuccess
+            if (!cpSuccess) {
+                return false
+            }
+            if (!fixUserAndGroupId(ctx, file, packageName)) {
+                Timber.tag(TAG).e("Error fixUserAndGroupId")
+                return false
+            }
+
+            (ctx.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager)
+                .killBackgroundProcesses(packageName)
+
+            Timber.tag(TAG).d("Preferences correctly updated")
+            return true
+        } finally {
+            if (!tmpFile.delete()) {
+                Timber.tag(TAG).e("Error deleting temporary file")
+            }
         }
-
-        Shell.cmd(String.format(CMD_CP, tmpFile.absolutePath, file)).exec()
-
-        if (!fixUserAndGroupId(ctx, file, packageName)) {
-            Timber.tag(TAG).e("Error fixUserAndGroupId")
-            return false
-        }
-
-        if (!tmpFile.delete()) {
-            Timber.tag(TAG).e("Error deleting temporary file")
-        }
-
-        (ctx.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager)
-            .killBackgroundProcesses(packageName)
-
-        Timber.tag(TAG).d("Preferences correctly updated")
-        return true
     }
 
     /**
@@ -334,8 +335,8 @@ object Utils {
      * @return true if success
      */
     private fun fixUserAndGroupId(ctx: Context, file: String, packageName: String): Boolean {
-        Timber.tag(TAG).d("fixUserAndGroupId(%s, %s)", file, packageName)
-        val uid: String
+        Timber.tag(TAG).d("fixUserAndGroupId($file, $packageName)")
+        val uid: Int
         val pm = ctx.packageManager ?: return false
         try {
             val appInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -345,18 +346,25 @@ object Utils {
                 @Suppress("DEPRECATION")
                 pm.getApplicationInfo(packageName, 0)
             }
-            uid = appInfo.uid.toString()
+            uid = appInfo.uid
         } catch (e: PackageManager.NameNotFoundException) {
             Timber.tag(TAG).e(e, "error while getting uid")
             return false
         }
 
-        if (TextUtils.isEmpty(uid)) {
+        if (uid < 0) {
             Timber.tag(TAG).d("uid is undefined")
             return false
         }
+        return ShellUtil.chown(file, uid).isSuccess
+    }
+}
 
-        Shell.cmd(String.format(CMD_CHOWN, uid, uid, file)).exec()
-        return true
+private inline fun <T : Closeable?, R> T.tryUse(block: (T) -> R): Exception? {
+    return try {
+        this.use(block)
+        null
+    } catch (e: Exception) {
+        e
     }
 }

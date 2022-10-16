@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -97,10 +98,10 @@ class PreferencesActivity : ComponentActivity() {
         Timber.i("onCreate")
         setContent {
             val context = LocalContext.current
-            val uiState = viewModel.uiState
+            val uiState by viewModel::uiState
 
             val topBarState = rememberTopAppBarState()
-            val scrollBehavior = remember { TopAppBarDefaults.pinnedScrollBehavior(topBarState) }
+            val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(topBarState)
             val pagerState = rememberPagerState()
             val windowInset = Modifier
                 .statusBarsPadding()
@@ -125,14 +126,14 @@ class PreferencesActivity : ComponentActivity() {
             val restoreDialogState = rememberMaterialDialogState()
             DialogRestore(
                 dialogState = restoreDialogState,
-                container = uiState.value.restoreData,
+                container = uiState.restoreData,
                 onRestore = { fileName ->
-                    val pkgName = uiState.value.pkgName
+                    val pkgName = uiState.pkgName
                     viewModel.performFileRestore(context, fileName, pkgName)
                 },
                 onDelete = { fileName ->
                     val currentPage = pagerState.currentPage
-                    val currentTab = uiState.value.tabList[currentPage]
+                    val currentTab = uiState.tabList[currentPage]
                     val file = currentTab.preferenceFile!!.file
 
                     viewModel.deleteFile(context, fileName, file)
@@ -156,10 +157,7 @@ class PreferencesActivity : ComponentActivity() {
                     topBar = {
                         PreferencesAppBar(
                             scrollBehavior = scrollBehavior,
-                            viewModel = viewModel,
-                            pkgTitle = uiState.value.pkgTitle,
-                            pkgName = uiState.value.pkgName,
-                            iconUri = uiState.value.pkgIcon,
+                            uiState = uiState,
                             onBackPressed = {
                                 @Suppress("DEPRECATION")
                                 onBackPressed()
@@ -169,18 +167,18 @@ class PreferencesActivity : ComponentActivity() {
                             },
                             onOverflowClicked = {
                                 val currentPage = pagerState.currentPage
-                                val currentTab = uiState.value.tabList[currentPage]
+                                val currentTab = uiState.tabList[currentPage]
                                 val file = currentTab.preferenceFile!!.file
 
                                 when (it) {
                                     EPreferencesOverflow.EDIT -> editFile(file)
                                     EPreferencesOverflow.FAV -> {
-                                        val pkgName = uiState.value.pkgName
+                                        val pkgName = uiState.pkgName
                                         val favorite = Utils.isFavorite(pkgName)
                                         Utils.setFavorite(pkgName, !favorite)
                                     }
                                     EPreferencesOverflow.BACKUP -> {
-                                        val pkgName = uiState.value.pkgName
+                                        val pkgName = uiState.pkgName
                                         viewModel.backupFile(this, pkgName, file)
                                     }
                                     EPreferencesOverflow.RESTORE -> {
@@ -198,6 +196,9 @@ class PreferencesActivity : ComponentActivity() {
                                 PrefManager.keySortType = it.ordinal
                                 viewModel.getTabsAndPreferences()
                             },
+                            onSearch = viewModel::onSearch,
+                            onSearchClose = viewModel::onSearchClose,
+                            onSearchValueChange = viewModel::onSearchValueChange,
                         )
                     }
                 ) { paddingValues ->
@@ -207,11 +208,11 @@ class PreferencesActivity : ComponentActivity() {
                         paddingValues = paddingValues,
                         scrollBehavior = scrollBehavior,
                         pagerState = pagerState,
-                        viewModel = viewModel,
-                        onClick = {
-                            /* TODO */
+                        uiState = viewModel.uiState,
+                        onClick = { preferenceFile, item ->
+                            //Show dialog
                         },
-                        onLongClick = {
+                        onLongClick = { _, _ ->
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             // TODO multi select.
                         }
@@ -224,8 +225,8 @@ class PreferencesActivity : ComponentActivity() {
     private fun editFile(file: String) {
         val intent = Intent(this, FileEditorActivity::class.java).apply {
             putExtra(KEY_FILE, file)
-            putExtra(KEY_ICON_URI, viewModel.uiState.value.pkgIcon)
-            putExtra(KEY_PACKAGE_NAME, viewModel.uiState.value.pkgName)
+            putExtra(KEY_ICON_URI, viewModel.uiState.pkgIcon)
+            putExtra(KEY_PACKAGE_NAME, viewModel.uiState.pkgName)
         }
 
         resultFileEdit.launch(intent)
@@ -235,24 +236,22 @@ class PreferencesActivity : ComponentActivity() {
 @Composable
 fun PreferencesAppBar(
     scrollBehavior: TopAppBarScrollBehavior,
-    viewModel: PreferencesViewModel,
-    pkgTitle: String,
-    pkgName: String,
-    iconUri: Uri?,
+    uiState: PreferencesState,
     onBackPressed: () -> Unit,
     onAddClicked: (value: EPreferencesAdd) -> Unit,
     onOverflowClicked: (value: EPreferencesOverflow) -> Unit,
-    onSortClicked: (value: EPreferencesSort) -> Unit
+    onSortClicked: (value: EPreferencesSort) -> Unit,
+    onSearch: () -> Unit,
+    onSearchClose: () -> Unit,
+    onSearchValueChange: (TextFieldValue) -> Unit
 ) {
-    val uiState by viewModel.uiState
-
     AppBar(
         scrollBehavior = scrollBehavior,
         title = {
             Row(modifier = Modifier.fillMaxWidth()) {
                 SubcomposeAsyncImage(
                     modifier = Modifier.size(48.dp),
-                    model = iconUri,
+                    model = uiState.pkgIcon,
                     contentDescription = null,
                     loading = {
                         CircularProgressIndicator()
@@ -268,12 +267,12 @@ fun PreferencesAppBar(
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
-                        text = pkgTitle,
+                        text = uiState.pkgTitle,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = pkgName,
+                        text = uiState.pkgName,
                         maxLines = 1,
                         fontSize = 12.sp,
                         overflow = TextOverflow.Ellipsis
@@ -284,7 +283,7 @@ fun PreferencesAppBar(
         actions = {
             PreferencesMenu(
                 isFavorite = Utils.isFavorite(uiState.pkgName),
-                onSearch = { viewModel.setIsSearching(true) },
+                onSearch = onSearch,
                 onAddClicked = onAddClicked,
                 onOverflowClicked = onOverflowClicked,
                 onSortClicked = onSortClicked
@@ -295,9 +294,10 @@ fun PreferencesAppBar(
                 Icon(Icons.Default.ArrowBack, contentDescription = null)
             }
         },
-        textState = viewModel.searchText,
+        textState = uiState.searchText,
         isSearching = uiState.isSearching,
-        onSearchClose = { viewModel.setIsSearching(false) }
+        onSearchClose = onSearchClose,
+        onSearchValueChange = onSearchValueChange
     )
 }
 
@@ -307,12 +307,10 @@ fun TabLayout(
     paddingValues: PaddingValues,
     scrollBehavior: TopAppBarScrollBehavior,
     pagerState: PagerState,
-    viewModel: PreferencesViewModel,
-    onClick: (preferenceFile: PreferenceFile?) -> Unit,
-    onLongClick: (preferenceFile: PreferenceFile?) -> Unit
+    uiState: PreferencesState,
+    onClick: PreferencesEntryItemClickHandler,
+    onLongClick: PreferencesEntryItemClickHandler
 ) {
-    val uiState by viewModel.uiState
-
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center

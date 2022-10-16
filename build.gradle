@@ -3,7 +3,7 @@ buildscript {
         accompanist_version= "0.26.2-beta"
         compose_version = '1.2.1'
         hilt_version = '2.43.2'
-        kotlin_version = '1.7.10'
+        kotlin_version = '1.7.20'
         ktlint_version = '10.3.0'
     }
 }

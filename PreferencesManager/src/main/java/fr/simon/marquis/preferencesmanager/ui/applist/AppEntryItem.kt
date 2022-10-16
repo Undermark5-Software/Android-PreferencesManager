@@ -74,8 +74,10 @@ private fun Preview_AppEntryItem() {
         name = "Some Cool App"
         sourceDir = ""
     }
-    val context = LocalContext.current
-    val entry = AppEntry(appInfo, context)
+    val entry = AppEntry(
+        applicationInfo = appInfo,
+        label = appInfo.packageName
+    )
 
     AppTheme(isSystemInDarkTheme()) {
         AppEntryItem(entry = entry, onClick = {}, onLongClick = {})

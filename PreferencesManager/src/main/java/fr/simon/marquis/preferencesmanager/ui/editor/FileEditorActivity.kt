@@ -74,7 +74,7 @@ class FileEditorActivity : ComponentActivity() {
 
             val context = LocalContext.current
             val topBarState = rememberTopAppBarState()
-            val scrollBehavior = remember { TopAppBarDefaults.pinnedScrollBehavior(topBarState) }
+            val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(topBarState)
 
             LaunchedEffect(Unit) {
                 val file = intent.getString(KEY_FILE)
@@ -164,6 +164,7 @@ class FileEditorActivity : ComponentActivity() {
                                     }
                                 )
                             },
+                            onSearchValueChange = { }
                         )
                     }
                 ) { paddingValues ->
@@ -213,7 +214,7 @@ private fun FileEditorLayout(
 @Composable
 private fun Preview_FileEditorLayout() {
     val topBarState = rememberTopAppBarState()
-    val scrollBehavior = remember { TopAppBarDefaults.pinnedScrollBehavior(topBarState) }
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(topBarState)
 
     val xmlColorTheme = XmlColorTheme.createTheme(EFontTheme.ECLIPSE)
 

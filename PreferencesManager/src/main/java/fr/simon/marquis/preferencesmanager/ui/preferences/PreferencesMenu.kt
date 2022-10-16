@@ -10,7 +10,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.lifecycle.viewmodel.compose.viewModel
 import fr.simon.marquis.preferencesmanager.R
 import fr.simon.marquis.preferencesmanager.model.EPreferencesAdd
 import fr.simon.marquis.preferencesmanager.model.EPreferencesOverflow
@@ -205,25 +204,25 @@ fun PreferencesMenu(
 @Preview(uiMode = Configuration.UI_MODE_NIGHT_NO or Configuration.UI_MODE_TYPE_NORMAL)
 @Preview(uiMode = Configuration.UI_MODE_NIGHT_YES or Configuration.UI_MODE_TYPE_NORMAL)
 @Composable
-private fun Preview_PreferencesMenu(
-    viewModel: PreferencesViewModel = viewModel(),
-    title: String = "Some Cool App",
-    pkgName: String = "com.some.cool.app"
-) {
+private fun Preview_PreferencesMenu() {
+    val viewModel = PreferencesViewModel(
+        pkgTitle = "Some Cool App",
+        pkgName = "com.some.cool.app",
+    )
     val topBarState = rememberTopAppBarState()
-    val scrollBehavior = remember { TopAppBarDefaults.pinnedScrollBehavior(topBarState) }
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(topBarState)
 
     AppTheme(isSystemInDarkTheme()) {
         PreferencesAppBar(
             scrollBehavior = scrollBehavior,
-            viewModel = viewModel,
-            pkgTitle = title,
-            pkgName = pkgName,
-            iconUri = null,
+            uiState = viewModel.uiState,
             onBackPressed = {},
             onAddClicked = {},
             onOverflowClicked = {},
             onSortClicked = {},
+            onSearchValueChange = {},
+            onSearchClose = {},
+            onSearch = {}
         )
     }
 }

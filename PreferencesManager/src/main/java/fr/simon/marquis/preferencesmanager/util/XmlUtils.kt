@@ -41,7 +41,7 @@ object XmlUtils {
      * @see .readMapXml
      */
     @Throws(XmlPullParserException::class, java.io.IOException::class)
-    fun writeMapXml(value: MutableMap<Any, Any>?, out: OutputStream) {
+    fun writeMapXml(value: MutableMap<String, Any>?, out: OutputStream) {
         val serializer = FastXmlSerializer()
         serializer.setOutput(out, "utf-8")
         serializer.startDocument(null, true)
@@ -331,10 +331,10 @@ object XmlUtils {
      */
     @Suppress("Unchecked_Cast")
     @Throws(XmlPullParserException::class, java.io.IOException::class)
-    fun readMapXml(`in`: InputStream): HashMap<Any, Any>? {
+    fun readMapXml(`in`: InputStream): HashMap<String, Any>? {
         val parser = Xml.newPullParser()
         parser.setInput(`in`, null)
-        return readValueXml(parser, arrayOfNulls(1)) as HashMap<Any, Any>?
+        return readValueXml(parser, arrayOfNulls(1)) as HashMap<String, Any>?
     }
 
     /**

@@ -25,11 +25,11 @@ import fr.simon.marquis.preferencesmanager.ui.theme.AppTheme
 @Composable
 fun PreferenceFragment(
     list: List<KeyValueIndex>,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
+    onClickGenerator: (KeyValueIndex) -> () -> Unit,
+    onLongClickGenerator: (KeyValueIndex) -> () -> Unit,
 ) {
     val topBarState = rememberTopAppBarState()
-    val scrollBehavior = remember { TopAppBarDefaults.pinnedScrollBehavior(topBarState) }
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(topBarState)
     val scrollState = rememberLazyListState()
 
     Column(
@@ -56,8 +56,8 @@ fun PreferenceFragment(
                     PreferencesEntryItem(
                         modifier = Modifier.animateItemPlacement(),
                         item = item,
-                        onClick = onClick,
-                        onLongClick = onLongClick
+                        onClick = onClickGenerator(item),
+                        onLongClick = onLongClickGenerator(item)
                     )
                 }
             }

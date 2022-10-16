@@ -41,6 +41,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import com.vanpra.composematerialdialogs.rememberMaterialDialogState
@@ -58,16 +59,17 @@ import fr.simon.marquis.preferencesmanager.util.PrefManager
 import fr.simon.marquis.preferencesmanager.util.Utils
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import kotlin.reflect.KFunction0
 
 class AppListActivity : ComponentActivity() {
 
     private val viewModel: AppListViewModel by viewModels()
 
-    private var activityResult = registerForActivityResult(
+    private val activityResultLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
         viewModel.run {
-            if (uiState.value.isRootGranted)
+            if (uiState.isRootGranted)
                 startTask(this@AppListActivity)
         }
     }
@@ -81,20 +83,20 @@ class AppListActivity : ComponentActivity() {
 
         if (savedInstanceState == null || Utils.previousApps == null) {
             viewModel.run {
-                if (uiState.value.isRootGranted)
+                if (uiState.isRootGranted)
                     startTask(this@AppListActivity)
             }
         }
 
         Timber.i("onCreate")
         setContent {
-            val uiState by viewModel.uiState
+            val uiState by viewModel::uiState
 
             val context = LocalContext.current
             val haptic = LocalHapticFeedback.current
             val scope = rememberCoroutineScope()
             val topBarState = rememberTopAppBarState()
-            val scrollBehavior = remember { TopAppBarDefaults.pinnedScrollBehavior(topBarState) }
+            val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(topBarState)
 
             val dialogNoRootState = rememberMaterialDialogState()
             DialogNoRoot(dialogState = dialogNoRootState)
@@ -121,22 +123,27 @@ class AppListActivity : ComponentActivity() {
                     }
                 }
             }
-
+            val ctx = LocalContext.current
             AppTheme(isDarkTheme = isDarkTheme) {
                 Scaffold(
                     modifier = windowInset,
                     topBar = {
                         AppListAppBar(
                             scrollBehavior = scrollBehavior,
-                            viewModel = viewModel,
+                            uiState = viewModel.uiState,
                             themeSettings = viewModel.themeSettings,
-                        )
+                            onSearch = viewModel::onSearch,
+                            onSearchClose = viewModel::onSearchClose,
+                            onSearchValueChange = viewModel::onSearchValueChange
+                        ) {
+                            viewModel.onShowSystemApps(ctx)
+                        }
                     }
                 ) { paddingValues ->
                     AppListLayout(
                         paddingValues = paddingValues,
                         scrollBehavior = scrollBehavior,
-                        viewModel = viewModel,
+                        uiState = viewModel.uiState,
                         onClick = { entry ->
                             if (!uiState.isRootGranted) {
                                 Timber.e("We don't have root to continue!")
@@ -151,7 +158,7 @@ class AppListActivity : ComponentActivity() {
                                         putExtra(KEY_TITLE, entry.label)
                                     }
 
-                                activityResult.launch(intent)
+                                activityResultLauncher.launch(intent)
                             }
                         },
                         onLongClick = { entry ->
@@ -170,7 +177,7 @@ class AppListActivity : ComponentActivity() {
                                 )
                             }
 
-                            activityResult.launch(intent)
+                            activityResultLauncher.launch(intent)
                         }
                     )
                 }
@@ -182,11 +189,15 @@ class AppListActivity : ComponentActivity() {
 @Composable
 private fun AppListAppBar(
     scrollBehavior: TopAppBarScrollBehavior,
-    viewModel: AppListViewModel,
+    uiState: AppListState,
+//    viewModel: AppListViewModel,
     themeSettings: ThemeSettings,
+    onSearch: () -> Unit,
+    onSearchClose: () -> Unit,
+    onSearchValueChange: (TextFieldValue) -> Unit,
+    onShowSystemApps: () -> Unit,
 ) {
     val context = LocalContext.current
-    val uiState by viewModel.uiState
 
     val dialogThemeState = rememberMaterialDialogState()
     DialogTheme(dialogThemeState, PrefManager.themePreference, themeSettings)
@@ -199,20 +210,16 @@ private fun AppListAppBar(
         title = { Text(text = stringResource(id = R.string.app_name)) },
         actions = {
             AppListMenu(
-                onSearch = { viewModel.setIsSearching(true) },
-                onShowSystemApps = {
-                    val currentValue = PrefManager.showSystemApps
-                    PrefManager.showSystemApps = !currentValue
-
-                    viewModel.startTask(context)
-                },
+                onSearch = onSearch,
+                onShowSystemApps = onShowSystemApps,
                 onSwitchTheme = { dialogThemeState.show() },
                 onAbout = { dialogAboutState.show() }
             )
         },
-        textState = viewModel.searchText,
+        textState = uiState.searchText,
         isSearching = uiState.isSearching,
-        onSearchClose = { viewModel.setIsSearching(false) }
+        onSearchClose = onSearchClose,
+        onSearchValueChange = onSearchValueChange
     )
 }
 
@@ -220,12 +227,11 @@ private fun AppListAppBar(
 private fun AppListLayout(
     paddingValues: PaddingValues,
     scrollBehavior: TopAppBarScrollBehavior,
-    viewModel: AppListViewModel,
+    uiState: AppListState,
     onClick: (entry: AppEntry) -> Unit,
     onLongClick: (entry: AppEntry) -> Unit,
 ) {
     val scrollState = rememberLazyListState()
-    val uiState by viewModel.uiState
 
     Box(
         modifier = Modifier

@@ -15,7 +15,6 @@ import fr.simon.marquis.preferencesmanager.R
 import fr.simon.marquis.preferencesmanager.ui.components.AppBar
 import fr.simon.marquis.preferencesmanager.ui.theme.AppTheme
 import fr.simon.marquis.preferencesmanager.util.PrefManager
-import kotlinx.coroutines.flow.MutableStateFlow
 
 @Composable
 fun AppListMenu(
@@ -87,8 +86,9 @@ fun AppListMenu(
 @Composable
 private fun Preview_AppListMenu(
     appName: String = stringResource(id = R.string.app_name),
-    textState: MutableStateFlow<TextFieldValue> = MutableStateFlow(TextFieldValue(""))
+
 ) {
+    var textFieldValue: TextFieldValue by remember { mutableStateOf(TextFieldValue("")) }
     AppTheme(isSystemInDarkTheme()) {
         AppBar(
             title = { Text(text = appName) },
@@ -100,7 +100,10 @@ private fun Preview_AppListMenu(
                     onAbout = {}
                 )
             },
-            textState = textState
+            textState = textFieldValue,
+            onSearchValueChange = {
+                textFieldValue = it
+            }
         )
     }
 }

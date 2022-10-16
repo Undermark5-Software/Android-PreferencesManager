@@ -27,13 +27,13 @@ import timber.log.Timber
 
 data class KeyValueIndex(
     var index: Int? = null,
-    var key: Any,
+    var key: String,
     var value: Any,
 )
 
 class PreferenceFile {
 
-    private var mPreferences: MutableMap<Any, Any>? = null
+    private var mPreferences: MutableMap<String, Any>? = null
     private var mList: MutableList<KeyValueIndex>? = null
     lateinit var file: String
 
@@ -70,7 +70,7 @@ class PreferenceFile {
         mPreferences = HashMap()
     }
 
-    private fun setPreferences(map: HashMap<Any, Any>?) {
+    private fun setPreferences(map: HashMap<String, Any>?) {
         mPreferences = map
         mList = map?.map {
             KeyValueIndex(key = it.key, value = it.value)

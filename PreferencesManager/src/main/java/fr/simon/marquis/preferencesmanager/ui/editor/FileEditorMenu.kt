@@ -16,7 +16,6 @@ import fr.simon.marquis.preferencesmanager.model.EFontSize
 import fr.simon.marquis.preferencesmanager.model.EFontTheme
 import fr.simon.marquis.preferencesmanager.ui.components.AppBar
 import fr.simon.marquis.preferencesmanager.ui.theme.AppTheme
-import kotlinx.coroutines.flow.MutableStateFlow
 
 @Composable
 fun FileEditorMenu(
@@ -175,8 +174,8 @@ fun FileEditorMenu(
 @Composable
 private fun Preview_FileEditorMenu(
     appName: String = stringResource(id = R.string.app_name),
-    textState: MutableStateFlow<TextFieldValue> = MutableStateFlow(TextFieldValue(""))
 ) {
+    var textFieldValue: TextFieldValue by remember { mutableStateOf(TextFieldValue("")) }
     AppTheme(isSystemInDarkTheme()) {
         AppBar(
             title = { Text(text = appName) },
@@ -187,7 +186,10 @@ private fun Preview_FileEditorMenu(
                     onFontSize = {},
                 )
             },
-            textState = textState
+            textState = textFieldValue,
+            onSearchValueChange = {
+                textFieldValue = it
+            }
         )
     }
 }
